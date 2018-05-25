@@ -1,0 +1,49 @@
+main :: IO ()
+main = putStrLn "Test suite not yet implemented"
+
+-- testBuild :: IO ()
+-- testBuild = do
+--     -- let a = build True $ Assign [VarName (Name "a")] [TableConst [ExpField (PrefixExp (PEVar (VarName (Name "b")))) Nil]]
+--     sameField "a = nil" [GlobalField {name = "a", solved = True, readOnly = False, otherFields = False, fields = []}]
+-- 
+--     sameField "a.b = nil" [GlobalField {name = "a", solved = False, readOnly = False, otherFields = False, fields = [
+--         GlobalField {name = "b", solved = True, readOnly = False, otherFields = False, fields = []}]}]
+-- 
+--     sameField "a.b.c = nil" [GlobalField {name = "a", solved = False, readOnly = False, otherFields = False, fields = [
+--         GlobalField {name = "b", solved = False, readOnly = False, otherFields = False, fields = [
+--             GlobalField {name = "c", solved = True, readOnly = False, otherFields = False, fields = []}]}]}]
+-- 
+--     sameField "a = b.c" [GlobalField {name = "a", solved = True, readOnly = False, otherFields = False, fields = []}]
+-- 
+--     sameField "a={b=nil}" [GlobalField {name = "a", solved = True, readOnly = False, otherFields = False, fields = [
+--         GlobalField {name = "b", solved = True, readOnly = False, otherFields = False, fields = []}]}]
+-- 
+--     sameField "a={b=nil, c=nil}" [GlobalField {name = "a", solved = True, readOnly = False, otherFields = False, fields = [
+--         GlobalField {name = "b", solved = True, readOnly = False, otherFields = False, fields = []}
+--         , GlobalField {name = "c", solved = True, readOnly = False, otherFields = False, fields = []}]}]
+-- 
+--     sameField "a={[b]=nil}" [GlobalField {name = "a", solved = True, readOnly = False, otherFields = True, fields = []}]
+-- 
+--     sameField "a={[b]=nil, c=nil}" [GlobalField {name = "a", solved = True, readOnly = False, otherFields = True, fields = [
+--         GlobalField {name = "c", solved = True, readOnly = False, otherFields = False, fields = []}]}]
+--     -- showField "a = 1"
+--     where
+--         showField x = do
+--             putStrLn x
+--             putStrLn $ show . parse $ x
+--             putStrLn $ "  " ++ (show . toField $ x)
+-- 
+--         parse s = case p of
+--             Right (Block x _) -> x
+--             _ -> []
+--             where
+--                 p = parseText chunk (T.pack s)
+-- 
+--         toField x = build `map` parse x
+--         -- toField x = globalFields `map` parse x
+--         sameField a b = do
+--             showField a
+--             case (toField a == b) of
+--                 True -> putStrLn " ...... same ... \n"
+--                 False -> putStrLn " ...... diff ... \n"
+--                 

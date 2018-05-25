@@ -1,0 +1,16 @@
+codes = true
+allow_defined_top=true
+ignore = {
+    "112",
+}
+
+
+std = 'max+actx+actx_auto'
+
+stds.actx = {
+    read_globals = {
+        resmng = {}
+    }
+}
+
+stds.actx_auto = {}
