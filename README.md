@@ -1,0 +1,2 @@
+# LuacheckConfigBuilder
+auto generate .luacheckrc
