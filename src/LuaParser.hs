@@ -10,6 +10,7 @@ import Language.Lua.PrettyPrinter
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Text.Regex.PCRE as Regex
+import qualified Data.Map.Strict as Map
 
 import Text.Regex.PCRE ((=~))
 
@@ -20,16 +21,22 @@ data GlobalField = GlobalField {
     , solved :: Bool
     , readOnly :: Bool
     , otherFields :: Bool
-    , fields :: [GlobalField]
+    , fields :: Field
 } deriving (Eq, Show)
 
 globalField :: GlobalField
-globalField = GlobalField "" False True False []
+globalField = GlobalField "" False True False Map.empty
 
 build :: Stat -> GlobalField
 build x = case x of
     (Assign [a] [b]) -> leftValue a (rightValue b)
     (FunAssign a _) -> leftValue a globalField {solved = True}
+
+-- fromList :: [GlobalField] -> Map.Map T.Text GlobalField
+fromList :: [GlobalField] -> Field
+fromList xs = Map.fromListWith merge $ map (\x -> (name x, x)) xs
+
+type Field = Map.Map T.Text GlobalField
 
 class GenGlobalField a where
     leftValue :: a -> GlobalField -> GlobalField
@@ -38,9 +45,9 @@ class GenGlobalField a where
 instance GenGlobalField Var where
     leftValue x g = case x of
         (VarName a) -> leftValue a g
-        (SelectName a b) -> leftValue a globalField {fields = [(leftValue b g)]}
+        (SelectName a b) -> leftValue a globalField {fields = fromList [leftValue b g]}
         (Select a b) -> if name b' /= "" 
-            then leftValue a globalField {fields = [b']}
+            then leftValue a globalField {fields = fromList [b']}
             else leftValue a b'
             -- leftValue a globalField {fields = [(leftValue b g)]}
             where
@@ -60,17 +67,18 @@ instance GenGlobalField Name where
 instance GenGlobalField Exp where
     leftValue x g = case x of
         String a -> if length t /= 1
-            then g {fields = []}
+            then g {fields = Map.empty}
             else g {name = t !! 0}
             where
                 t = splitModuleName a
-        _ -> g {fields = []}
+        _ -> g {fields = Map.empty}
     rightValue x = case x of
-        (TableConst xs) -> globalField {solved = True, fields = xs'', otherFields = otherFields}
+        (TableConst xs) -> globalField {solved = True, fields = fromList xs'', otherFields = otherFields}
             where
                 xs' = map rightValue xs
                 otherFields = any (\x -> name x == "") xs'
                 xs'' = filter (\x -> name x /= "") xs'
+
         _ -> globalField {solved = True}
 
 instance GenGlobalField PrefixExp where
@@ -90,13 +98,13 @@ instance GenGlobalField TableField where
 instance GenGlobalField FunName where
     leftValue x g = case x of
         (FunName a [] _) -> leftValue a g
-        (FunName a xs _) -> leftValue a (globalField {fields = [leftValue xs g]})
+        (FunName a xs _) -> leftValue a (globalField {fields = fromList [leftValue xs g]})
     rightValue x = case x of
         (FunName a xs _) -> undefined
 
 instance (GenGlobalField a) => GenGlobalField [a] where
     leftValue [x] g = leftValue x g
-    leftValue (x:xs) g = leftValue x (globalField {fields=[leftValue xs g]})
+    leftValue (x:xs) g = leftValue x (globalField {fields= fromList [leftValue xs g]})
     leftValue [] g = g
     rightValue _ = undefined
     -- rightValue (x:xs) = rightValue x {solved = True, fields = [rightValue xs]}
@@ -152,17 +160,17 @@ moduleName (FunCall (NormalFunCall f (Args (String name:p))))
     | otherwise = Nothing
 moduleName _ = Nothing
 
-generateGlobalFields :: [Stat] -> [GlobalField]
+generateGlobalFields :: [Stat] -> Field
 generateGlobalFields xs@(x:_) = case moduleName x of
     Nothing -> fields
     Just name -> fromNames (splitModuleName name) fields
         where
             fromNames [] fields = fields
-            fromNames (x:xs) fields = [globalField {name = x, solved = True, fields = fromNames xs fields}]
+            fromNames (x:xs) fields = fromList [globalField {name = x, solved = True, fields = fromNames xs fields}]
     where 
-        xs' = allGlobals xs
-        fields = map build xs'
-generateGlobalFields [] = []
+        toPair a = (name a, a)
+        fields = Map.fromListWith merge . map (toPair . build) . allGlobals $ xs
+generateGlobalFields [] = Map.empty
 
 splitModuleName :: T.Text -> [T.Text]
 splitModuleName s = map T.pack (Regex.getAllTextMatches (T.unpack s =~ ("\\w+" :: String)))
@@ -174,25 +182,34 @@ parseContent s = case p of
     where
         p = parseText chunk s
 
-sameName :: GlobalField -> GlobalField -> Bool
-sameName a b = name a == name b
+-- sameName :: GlobalField -> GlobalField -> Bool
+-- sameName a b = name a == name b
 
-mergeGlobalField :: GlobalField -> GlobalField -> GlobalField
-mergeGlobalField a b = a {readOnly=readOnly',solved=solved',otherFields=otherFields',fields=fields'}
+-- mergeGlobalField :: GlobalField -> GlobalField -> GlobalField
+-- mergeGlobalField a b = a {readOnly=readOnly',solved=solved',otherFields=otherFields',fields=fields'}
+--     where
+--         readOnly' = readOnly a || readOnly b
+--         solved' = solved a || solved b
+--         otherFields' = otherFields a || otherFields b
+--         fields' = mergeGlobalFields (fields a) (fields b)
+-- 
+-- 
+-- mergeGlobalFields :: [GlobalField] -> [GlobalField] -> [GlobalField]
+-- mergeGlobalFields xs ys =  foldl (\res y -> mergeGlobalFields' res y) xs ys
+--     where
+--         mergeGlobalFields' (a:as) b = if (sameName a b) 
+--             then (mergeGlobalField a b):as
+--             else a:(mergeGlobalFields' as b)
+--         mergeGlobalFields' [] b = [b {fields = mergeGlobalFields [] (fields b)}]
+
+merge :: GlobalField -> GlobalField -> GlobalField
+merge a b = a {readOnly=readOnly',solved=solved',otherFields=otherFields',fields=fields'}
     where
         readOnly' = readOnly a || readOnly b
         solved' = solved a || solved b
         otherFields' = otherFields a || otherFields b
-        fields' = mergeGlobalFields (fields a) (fields b)
+        fields' = Map.unionWith merge (fields a) (fields b)
 
-
-mergeGlobalFields :: [GlobalField] -> [GlobalField] -> [GlobalField]
-mergeGlobalFields xs ys =  foldl (\res y -> mergeGlobalFields' res y) xs ys
-    where
-        mergeGlobalFields' (a:as) b = if (sameName a b) 
-            then (mergeGlobalField a b):as
-            else a:(mergeGlobalFields' as b)
-        mergeGlobalFields' [] b = [b {fields = mergeGlobalFields [] (fields b)}]
 
 globalFieldToLua :: GlobalField -> TableField
 globalFieldToLua a = if (readOnly' && not otherFields' && null fields')
@@ -207,8 +224,8 @@ globalFieldToLua a = if (readOnly' && not otherFields' && null fields')
         otherFields' = otherFields a
         fields' = fields a
     
-globalFieldsToLua :: [GlobalField] -> [TableField]
-globalFieldsToLua xs = map globalFieldToLua (filter solved xs)
+globalFieldsToLua :: Field -> [TableField]
+globalFieldsToLua xs = map globalFieldToLua . filter solved . Map.elems $ xs
 
 -- Hx@2018-05-21 : 任意a.b.c..生成暂时不知道该怎么写，只处理a.b的情况
 assignName :: T.Text -> Var

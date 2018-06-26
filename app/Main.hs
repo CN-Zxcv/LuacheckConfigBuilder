@@ -15,6 +15,7 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Control.DeepSeq
 import Data.Foldable (foldlM)
+import Data.Map.Strict as Map
 
 import Path
 import qualified LuaParser as P
@@ -35,7 +36,7 @@ main = do
         let st = P.parseContent content
 
         paths <- getRecursiveContents $ path
-        res <- foldlM buildGlobals [] paths
+        res <- foldlM buildGlobals Map.empty paths
         let t = P.globalFieldsToLua res
             var = TableConst [NamedField (Name "read_globals") (TableConst t)]
             result = P.replaceAssign st moduleVar var
@@ -62,12 +63,12 @@ main = do
 --         return $ T.hGetContents h
     
 
-buildGlobals :: [P.GlobalField] -> FilePath -> IO [P.GlobalField]
+buildGlobals :: P.Field -> FilePath -> IO P.Field
 buildGlobals res path = do
     bracket (openFile path ReadMode) hClose $ \h -> do
         content <- T.hGetContents h
         putStrLn $ "working on " ++ path
-        return $ P.mergeGlobalFields res (P.generateGlobalFields . P.parseContent $ content)
+        return $ Map.unionWith P.merge res (P.generateGlobalFields . P.parseContent $ content)
 
 path :: FilePath
 path = "../../script"
@@ -88,7 +89,7 @@ testFile = do
     bracket (openFile path ReadMode) hClose $ \h -> do
         content <- T.hGetContents h
         let st = P.parseContent content
-        let res = P.mergeGlobalFields [] (P.generateGlobalFields st)
+        let res = Map.unionWith P.merge Map.empty (P.generateGlobalFields st)
         putStrLn . show $ res
         -- putStrLn . show $ P.generateGlobalFields st
         -- putStrLn . show $ content

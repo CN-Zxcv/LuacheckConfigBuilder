@@ -14,7 +14,7 @@ import System.FilePath ((</>), takeExtensions)
 getRecursiveContents :: FilePath -> IO [FilePath]
 getRecursiveContents topdir = do
     names <- listDirectory topdir
-    let propNames = filter (`notElem` [".svn", "server"]) names
+    let propNames = filter (`notElem` [".svn"]) names
     paths <- forM propNames $ \name -> do
         let path = topdir </> name
         isDirectory <- doesDirectoryExist path
